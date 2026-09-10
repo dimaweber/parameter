@@ -1,0 +1,48 @@
+# Doxygen configuration for parameter, generated independently of the
+# parent (minesweeper) repository's own Doxyfile - this directory is meant
+# to be extractable into its own repository (see the note at the top of
+# include/parameter/parameter.hxx), so its documentation shouldn't depend
+# on anything outside libs/parameter/ either.
+#
+# Deliberately minimal - only settings that differ from doxygen's built-in
+# defaults are listed; run `doxygen -g -` to see every available option.
+# Regenerate with:
+#   doxygen Doxyfile
+# (from this directory - paths below are relative to it), or the
+# `parameter_docs` CMake target if Doxygen was found at configure time.
+# Output goes to ./docs/html/ (gitignored).
+
+PROJECT_NAME            = "parameter"
+PROJECT_BRIEF           = "recursive scalar/array/map value type plus a compact binary (de)serializer"
+OUTPUT_DIRECTORY        = docs
+
+INPUT                   = include
+RECURSIVE               = YES
+FILE_PATTERNS           = *.hxx *.h *.hpp
+EXTENSION_MAPPING       = hxx=C++
+
+USE_MDFILE_AS_MAINPAGE  = readme.md
+INPUT                  += readme.md changelog.md tests.md
+
+# The entire public API surface (include/parameter/parameter.hxx) is
+# annotated, so - unlike the parent project's Doxyfile, which is only
+# partially annotated so far - it's reasonable to warn about anything left
+# undocumented here.
+EXTRACT_ALL             = YES
+WARN_IF_UNDOCUMENTED    = YES
+WARN_IF_DOC_ERROR       = YES
+
+JAVADOC_AUTOBRIEF       = YES
+
+GENERATE_HTML           = YES
+GENERATE_LATEX          = NO
+
+# Off, not just unset-to-default: this environment's graphviz (2.42.4, from
+# 2020) segfaults on the `id="..."` attributes this doxygen version (1.15)
+# emits for SVG click targets - reproduces with `dot` invoked directly on
+# the generated .dot file, so it's a graphviz/doxygen version-skew issue,
+# not anything about this project's content. Safe to flip back to YES in
+# an environment with a newer graphviz.
+HAVE_DOT                = NO
+
+QUIET                   = YES
