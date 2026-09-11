@@ -9,13 +9,13 @@
 /// Unlike envelope, this library stays **header-only** even after
 /// extraction. `parameter_t`/`parameter_bytestream_t` sit at the plugin ABI
 /// boundary (`src/server/plugins/api.hxx` `#include`s this header and
-/// re-exposes these names unqualified), but - unlike `board_i`/`plugin_api_i`
+/// re-exposes these names unqualified), but - unlike `board_i`/`gameplay_plugin_api_i`
 /// and friends in that header, which cross as vtable calls and so do need
 /// `addon_api_abi_tag()`'s compiler/stdlib fingerprint to catch a layout
 /// mismatch - a `parameter_t` itself never crosses that boundary as a raw
 /// C++ object: every call site serializes it through `parameter_bytestream_t`
 /// first and only ever passes the resulting `std::byte*`/`size_t` across a
-/// vtable call or C function pointer (see `plugin_api_i::simple_handler_t`/
+/// vtable call or C function pointer (see `gameplay_plugin_api_i::simple_handler_t`/
 /// `board_handler_t` and `resource_wire`/`handler_wire` in `plugins/api.hxx`).
 /// So this type's in-memory layout genuinely doesn't need to match between
 /// the host and a plugin `.so` - what does need to match is the wire
