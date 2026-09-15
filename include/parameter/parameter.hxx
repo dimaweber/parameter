@@ -1,40 +1,5 @@
 #pragma once
 
-/// @file
-/// This header, and everything under `libs/parameter/`, must never include
-/// or link against anything from the rest of this repository (`src/**`) -
-/// same rule as `libs/envelope/`, and for the same reason: it's meant to be
-/// liftable into its own project unmodified.
-///
-/// Unlike envelope, this library stays **header-only** even after
-/// extraction. `parameter_t`/`parameter_bytestream_t` sit at the plugin ABI
-/// boundary (`src/server/plugins/api.hxx` `#include`s this header and
-/// re-exposes these names unqualified), but - unlike `board_i`/`gameplay_plugin_api_i`
-/// and friends in that header, which cross as vtable calls and so do need
-/// `addon_api_abi_tag()`'s compiler/stdlib fingerprint to catch a layout
-/// mismatch - a `parameter_t` itself never crosses that boundary as a raw
-/// C++ object: every call site serializes it through `parameter_bytestream_t`
-/// first and only ever passes the resulting `std::byte*`/`size_t` across a
-/// vtable call or C function pointer (see `gameplay_plugin_api_i::simple_handler_t`/
-/// `board_handler_t` and `resource_wire`/`handler_wire` in `plugins/api.hxx`).
-/// So this type's in-memory layout genuinely doesn't need to match between
-/// the host and a plugin `.so` - what does need to match is the wire
-/// *format* `store()`/`load()` produce, which is exactly what
-/// `parameter_bytestream_t::wire_version` guards explicitly (a skewed
-/// reader fails loudly rather than misparsing).
-///
-/// Given that, this could technically be a linked (even shared) library
-/// instead. It stays header-only anyway: one shared copy of the
-/// serialization logic keeps both sides trivially in lockstep without
-/// relying on `wire_version` ever being exercised in practice, and it avoids
-/// adding a new linked build dependency to every plugin `.so` for something
-/// this small - each `write()`/`read_*()` call is a handful of branches
-/// operating on one already-in-hand buffer, exactly the kind of code that
-/// benefits from being inlined at the call site rather than going through
-/// a real call, so there's no compiled-library win being left on the table
-/// here. So this directory intentionally has no `.cxx` and no compiled
-/// target, only headers a consumer includes directly - see `CMakeLists.txt`.
-
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -72,27 +37,6 @@ template<typename T>
 using result_t = std::expected<T, std::string>;
 
 struct parameter_bytestream_t {
-  /// @todo: zip/unzip and a stronger (e.g. sha256) signature don't belong
-  ///        in this class - every consumer of this header (every plugin
-  ///        .so as well as the host) can only ever depend on what's
-  ///        already a hard requirement for everyone building against it,
-  ///        and pulling in a compression/crypto library for that would be
-  ///        a permanent dependency tax for a same-process boundary that
-  ///        doesn't actually have an adversary or a bandwidth problem.
-  ///        Those belong as wrappers around the raw store()/load() bytes
-  ///        instead - compress/sign before store()'s bytes go wherever
-  ///        they're going, decompress/verify before they reach load().
-  /// @note: this type used to live directly inside the plugin ABI header
-  ///        (`src/server/plugins/api.hxx`) and has since moved into its
-  ///        own library here, since it's genuinely useful beyond that one
-  ///        boundary. It stays header-only regardless (see the @file
-  ///        comment above for why that's a build-simplicity/inlining
-  ///        choice here, not an ABI necessity) - a .cxx remains an option
-  ///        later (e.g. a table-based CRC, or true concurrent partial-read
-  ///        support with an unwind/rewind stack - speculative for now
-  ///        since nothing here has a concurrent producer/consumer on one
-  ///        buffer yet), it just isn't worth it for code this small and
-  ///        call-site-dependent.
   parameter_bytestream_t (std::byte* buffer, size_t buffer_size) : buffer_(buffer), buffer_size_(buffer_size) {
   }
 
@@ -102,10 +46,7 @@ struct parameter_bytestream_t {
   /// Bump when serialize()/deserialize()'s wire grammar - or store()/load()'s
   /// own header shape below - changes in a way that would make an old reader
   /// misparse a new writer's bytes (new type_tag values appended at the end
-  /// are fine; anything else isn't). Written/checked once per buffer by
-  /// store()/load(), outside the recursive grammar itself -
-  /// serialize()/deserialize() stay unaware it exists. Bumped to 2 for the
-  /// length+checksum header fields below.
+  /// are fine; anything else isn't).
   static constexpr uint8_t wire_version = 2;
 
   /// Bytes actually written/consumed so far - lets a caller that store()d
@@ -125,13 +66,6 @@ struct parameter_bytestream_t {
   /// can throw at all internally. serialize()/deserialize() are the
   /// recursive core and are deliberately private - a caller only ever
   /// deals in whole, versioned buffers.
-  ///
-  /// The header written here - version, then a fixed-width payload length
-  /// and checksum - is deliberately outside serialize()/deserialize()'s own
-  /// recursive, compact (numberX-tagged) grammar: it's a single one-time
-  /// field per buffer, not a value repeated per array/map element, so the
-  /// few extra fixed-width bytes don't matter and a fixed width means
-  /// load() can find it without first having to parse anything.
   [[nodiscard]] result_t<void> store (const parameter_t& param) {
     if ( offset_ != 0 ) {
       return std::unexpected(fmt::format("parameter_bytestream_t::store: instance already used (offset {} != 0); use a fresh instance per buffer", offset_));
@@ -139,9 +73,6 @@ struct parameter_bytestream_t {
     try {
       put_byte(wire_version);
 
-      // Length and checksum are only known once serialize() has actually
-      // run, so reserve their slot now and backfill it once the payload
-      // is written.
       check_capacity(sizeof(uint64_t) + sizeof(uint32_t));
       const size_t header_pos = offset_;
       offset_ += sizeof(uint64_t) + sizeof(uint32_t);
@@ -201,10 +132,6 @@ struct parameter_bytestream_t {
   /// @}
 
 private:
-  /// Internal-only: serialize()/deserialize()'s recursive descent unwinds
-  /// through this on any failure. It never crosses store()/load() - both
-  /// catch std::exception and convert to result_t's error side before
-  /// returning.
   struct error : std::runtime_error {
     using std::runtime_error::runtime_error;
   };
@@ -264,10 +191,6 @@ private:
     return *as_ptr<T>(buffer_ + offset_);
   }
 
-  /// Every read/write primitive below funnels through here first, so a
-  /// truncated, corrupted, or maliciously short buffer fails loudly right
-  /// where it would otherwise read/write out of bounds, instead of silently
-  /// touching memory past buffer_size_.
   void check_capacity (size_t needed) const {
     if ( static_cast<size_t>(offset_) + needed > buffer_size_ ) {
       throw error(fmt::format("parameter_bytestream_t: buffer overrun at offset {} (need {} more bytes, capacity {})", offset_, needed, buffer_size_));

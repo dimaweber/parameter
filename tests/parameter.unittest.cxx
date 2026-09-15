@@ -6,8 +6,8 @@
 
 #include <parameter/parameter.hxx>
 
-[[maybe_unused]] parameter_t             p;    // make sure parameter_t is defined and accessible
-[[maybe_unused]] parameter_bytestream_t* pbs;  // make sure parameter_bytestream_t is defined and accessible
+[[maybe_unused]] parameter_t             p;
+[[maybe_unused]] parameter_bytestream_t* pbs;
 
 std::ostream& operator<< (std::ostream& os, const parameter_t& p) {
   std::visit([&os] (const auto& v) {
@@ -31,9 +31,6 @@ std::ostream& operator<< (std::ostream& os, const parameter_t& p) {
   return os;
 }
 
-// store() into buffer with one instance, then load() from it with a fresh
-// one - mirrors how host and plugin would each use their own instance over
-// the same bytes.
 result_t<parameter_t> roundtrip (const parameter_t& p, std::span<std::byte> buffer) {
   parameter_bytestream_t pbs_write(buffer);
   if ( const auto written = pbs_write.store(p); !written ) {
@@ -162,10 +159,6 @@ TEST (ParametersBitstream, RejectsReusedInstance) {
   parameter_bytestream_t pbs(buffer);
   ASSERT_TRUE(pbs.store(parameter_t {int64_t {42}}).has_value( ));
 
-  // offset_ is no longer 0 after the first store() - a second store() or a
-  // load() on the same instance would either corrupt the buffer or parse
-  // from the middle of it, so both must be refused rather than silently
-  // doing the wrong thing.
   EXPECT_FALSE(pbs.store(parameter_t {int64_t {7}}).has_value( ));
   EXPECT_FALSE(pbs.load( ).has_value( ));
 }
@@ -190,9 +183,6 @@ TEST (ParametersBitstream, RejectsCorruptedPayload) {
   parameter_bytestream_t pbs_write(buffer);
   ASSERT_TRUE(pbs_write.store(parameter_t {std::string("Hello, World!")}).has_value( ));
 
-  // Flip a bit well inside the payload (past the version + length +
-  // checksum header) - the bytes still parse as *some* well-formed
-  // string, so only the checksum catches this.
   buffer[pbs_write.size( ) - 1] ^= std::byte {0x01};
 
   parameter_bytestream_t pbs_read(buffer);
@@ -200,11 +190,6 @@ TEST (ParametersBitstream, RejectsCorruptedPayload) {
 }
 
 TEST (ParametersBitstream, IgnoresGarbageBeyondTheStoredPayload) {
-  // A buffer much bigger than the payload, pre-filled with non-zero
-  // "garbage" - e.g. leftover bytes from an earlier store() into the same
-  // scratch buffer. load() must trust only the length this store() wrote,
-  // not the buffer's full physical size, or it would end up reading that
-  // garbage as if it were real trailing data.
   std::array<std::byte, 4096> buffer;
   buffer.fill(std::byte {0xfa});
 
@@ -212,8 +197,6 @@ TEST (ParametersBitstream, IgnoresGarbageBeyondTheStoredPayload) {
   const parameter_t      p_int = int64_t {42};
   ASSERT_TRUE(pbs_write.store(p_int).has_value( ));
 
-  // load() against the *entire* oversized buffer, not just the bytes
-  // actually written.
   parameter_bytestream_t pbs_read(buffer);
   const auto              out = pbs_read.load( );
   ASSERT_TRUE(out.has_value( )) << out.error( );
