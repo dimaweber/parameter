@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.20)
 # This library is self-contained; its only third-party dependency is fmt.
 # This CMake project works both standalone and as a subdirectory.
 #
-# Unlike libs/envelope, this is an INTERFACE library, not STATIC: it has no
-# .cxx and never will - see include/parameter/parameter.hxx for why it must
-# stay header-only (it's plugin ABI surface).
+# Unlike the compiled `envelope` library, this is an INTERFACE target, not
+# STATIC: it has no .cxx and will stay header-only - see
+# include/parameter/parameter.hxx for why (it's plugin ABI surface).
 project(parameter LANGUAGES CXX)
 
 set(TARGET_PARAMETER parameter)
