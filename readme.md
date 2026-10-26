@@ -26,13 +26,11 @@ const auto             loaded = reader.load( );  // result_t<parameter_t>
 
 ## Why this exists
 
-`parameter_t` began life inside this repository's plugin ABI header
-(`src/server/plugins/api.hxx`), where it's still used to describe HTTP request
-parameters and handler results that cross the host/plugin `dlopen()` boundary as
-raw bytes. It turned out to be independently useful - a plain recursive
-value/serialization type has no actual dependency on plugins, boards, or HTTP -
-so it now lives here, and `plugins/api.hxx` just `#include`s this header and
-uses its types unqualified, same as before.
+`parameter_t` began life inside minesweeper's plugin ABI header, where it was used to
+describe HTTP request parameters and handler results that cross the host/plugin boundary
+as raw bytes. It turned out to be independently useful - a plain recursive value and
+serialization type has no actual dependency on plugins, boards, or HTTP - so it now lives
+in this standalone library, which the plugin SDK consumes as a normal dependency.
 
 ## `parameter_t`
 
@@ -69,25 +67,27 @@ explicitly and fails rather than guessing.
 
 ## Dependencies
 
-fmt only (for error-message formatting) - nothing here depends on anything else
-in whichever repository it's currently vendored inside (see the note at the top
-of `include/parameter/parameter.hxx`), so this directory can be lifted into its
-own project unmodified.
+fmt only (for error-message formatting); there are no project-local dependencies.
 
 ## Header-only, on purpose
 
-Unlike this repository's other extracted library (`libs/envelope/`, a compiled
-static library), this one stays header-only even though it's built as its own
-`libs/parameter/` directory - see the note at the top of
-`include/parameter/parameter.hxx` for why, in short: a `parameter_t` never
-crosses the plugin ABI boundary as a raw object (only its serialized bytes do,
-versioned by `wire_version`), so there's no ABI reason to compile it into a
-linked library, and the code is small and call-site-dependent enough that
-staying inline is a real (not just simpler) win over adding a `.cxx`.
+Unlike the compiled `envelope` library, this one stays header-only: a `parameter_t`
+never crosses the plugin ABI boundary as a raw object (only its serialized bytes do,
+versioned by `wire_version`), so there's no ABI reason to compile it into a linked
+library, and the code is small and call-site-dependent enough that staying inline is a
+real (not just simpler) win over adding a `.cxx`.
 
 ## Building
 
-Currently built as part of the parent project via `add_subdirectory(libs/parameter)`,
-producing an `INTERFACE` library target named `parameter` (include path + fmt
-dependency only - nothing to compile or link). See [`tests.md`](tests.md) for
-how its own test suite builds and runs.
+This is a standalone CMake project producing an `INTERFACE` library target named
+`parameter` (include path + fmt dependency only - nothing to compile or link). It can
+also be added as a CMake subdirectory. Build and run the library's tests with:
+
+```
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+fmt and GTest (for tests, enabled by default) must be available. See [`tests.md`](tests.md)
+for details.

@@ -1,33 +1,29 @@
 # Testing
 
-`parameter`'s test suite is GTest-based, lives in `tests/parameter.unittest.cxx`,
-and currently builds as part of the parent (minesweeper) project's CMake
-configuration - see "Standalone build" below for what's missing to build it
-outside that project.
+`parameter`'s test suite is GTest-based and lives in `tests/parameter.unittest.cxx`.
 
-## Building and running (inside the parent project)
+## Building and running
 
 ```
+cmake -S . -B build
 cmake --build build --target parameter_test
 ```
 
 Then either run it directly:
 
 ```
-./build/libs/parameter/tests/parameter_test
-./build/libs/parameter/tests/parameter_test --gtest_filter='ParametersBitstream.RejectsCorruptedPayload'
+./build/tests/parameter_test
+./build/tests/parameter_test --gtest_filter='ParametersBitstream.RejectsCorruptedPayload'
 ```
 
-or through CTest, alongside every other test in the parent project:
+or through CTest:
 
 ```
-ctest --test-dir build -R ParametersBitstream --output-on-failure
+ctest --test-dir build --output-on-failure
 ```
 
-Building the tests at all is gated by `PARAMETER_BUILD_TESTS`
-(`libs/parameter/CMakeLists.txt`), which defaults to whatever the parent
-project's `BUILD_TESTS` option is set to - pass `-DPARAMETER_BUILD_TESTS=OFF`
-to configure the `parameter` library without its tests regardless of that.
+Tests are enabled by default and require GTest. Pass `-DPARAMETER_BUILD_TESTS=OFF` to
+configure the `parameter` library without its tests.
 
 ## What's covered
 
@@ -46,14 +42,3 @@ to configure the `parameter` library without its tests regardless of that.
   scratch buffer) only trusts the length this `store()` actually wrote, never
   the buffer's full physical size.
 
-## Standalone build
-
-`tests/CMakeLists.txt` currently links against whatever `GTest::gtest_main`
-target the *parent* project's top-level `CMakeLists.txt` already located (via
-`find_package`/`FetchContent`) - there is no `find_package(GTest)`/
-`FetchContent` call inside `libs/parameter/` itself yet. Building this
-directory as its own standalone top-level project (outside minesweeper) will
-need that added to `libs/parameter/CMakeLists.txt` or `tests/CMakeLists.txt`
-before `tests/` will configure on its own. The `parameter` library target
-itself has no such gap - its only dependency (fmt) is already resolved via
-`find_package()` inside `libs/parameter/CMakeLists.txt`.
